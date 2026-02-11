@@ -1,0 +1,46 @@
+{
+  "name": "okx-trader",
+  "version": "1.0.0",
+  "description": "Professional OKX grid trading system with dual-layer (Macro/Micro) strategy and automated trailing logic.",
+  "author": "alz",
+  "license": "MIT",
+  "keywords": ["crypto", "okx", "trading", "grid", "pnl", "automation"],
+  "homepage": "https://github.com/esojourn/okx-trader",
+  "engines": {
+    "openclaw": ">=2026.2.9"
+  },
+  "tools": [
+    {
+      "name": "okx_report",
+      "command": "node scripts/report.js",
+      "description": "Generates a real-time trading report including trade counts, average prices, and pending order status for both Macro and Micro grids."
+    },
+    {
+      "name": "okx_grid_maintain",
+      "command": "node scripts/grid-bot.js",
+      "description": "Maintains the grid structure on OKX. Automatically places missing orders, cancels stale ones, and performs grid re-centering (rescale) if the price drifts.",
+      "params": {
+        "type": {
+          "type": "string",
+          "description": "The bot type to maintain: 'main' (Macro Grid) or 'micro' (Micro Grid).",
+          "default": "main",
+          "enum": ["main", "micro"]
+        }
+      }
+    }
+  ],
+  "cronTemplates": [
+    {
+      "name": "OKX Hourly PnL Report",
+      "schedule": "0 * * * *",
+      "task": "okx_report",
+      "description": "Sends a formatted profit and loss summary every hour."
+    },
+    {
+      "name": "OKX Grid Auto-Maintenance",
+      "schedule": "*/5 * * * *",
+      "task": "okx_grid_maintain",
+      "description": "Checks and updates the grid every 5 minutes."
+    }
+  ]
+}
