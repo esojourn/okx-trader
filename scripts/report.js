@@ -2,25 +2,25 @@ const fs = require('fs');
 const path = require('path');
 const OKXClient = require('../lib/okx-client');
 
-// 统一配置读取逻辑 (尝试读取 workspace 路径或环境路径)
 function getConfig() {
-    const paths = [
-        path.resolve(process.cwd(), 'okx_config.json'),
-        path.resolve(__dirname, '../../../workspace/okx_data/config.json'),
-        path.resolve(__dirname, '../config.json')
-    ];
-    for (const p of paths) {
-        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+    const configPath = '/root/.openclaw/workspace/okx_data/config.json';
+    if (fs.existsSync(configPath)) {
+        return JSON.parse(fs.readFileSync(configPath, 'utf8'));
     }
-    throw new Error('OKX Config not found. Please provide okx_config.json');
+    return {
+        apiKey: process.env.OKX_API_KEY,
+        secretKey: process.env.OKX_SECRET_KEY,
+        passphrase: process.env.OKX_PASSPHRASE,
+        isSimulation: process.env.OKX_IS_SIMULATION === 'true'
+    };
 }
 
 async function runReport() {
     try {
         const client = new OKXClient(getConfig());
         const [fills, pendingOrders] = await Promise.all([
-            client.request('/trade/fills?instId=BTC-USDT'),
-            client.request('/trade/orders-pending?instId=BTC-USDT')
+            client.request('/trade/fills', 'GET', { instId: 'BTC-USDT' }),
+            client.request('/trade/orders-pending', 'GET', { instId: 'BTC-USDT' })
         ]);
         
         if (fills.error || pendingOrders.error) {
@@ -29,7 +29,7 @@ async function runReport() {
         }
 
         const oneHourAgo = Date.now() - (60 * 60 * 1000);
-        const recentFills = fills.filter(f => parseInt(f.ts) > oneHourAgo);
+        const recentFills = Array.isArray(fills) ? fills.filter(f => parseInt(f.ts) > oneHourAgo) : [];
 
         const stats = {
             micro: { buyUsdt: 0, buyQty: 0, buyCount: 0, sellUsdt: 0, sellQty: 0, sellCount: 0 },

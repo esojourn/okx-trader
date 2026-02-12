@@ -1,102 +1,73 @@
-# OKX-Trader Skill for OpenClaw
+# OKX Trader Skill
 
-A professional-grade automated trading skill for OpenClaw, specifically optimized for the OKX exchange. It provides a robust, dual-strategy grid trading system with built-in risk management and high-efficiency reporting.
+[![ClawHub](https://img.shields.io/badge/ClawHub-okx--trader-blue)](https://clawhub.ai/esojourn/okx-trader)
 
-## 🌟 Core Concepts: The Dual-Grid Strategy
+Professional automated grid trading system for OKX, designed for OpenClaw.
 
-This skill is designed with a **Macro + Micro** dual-layer approach to maximize market coverage:
+## Trading Logic
 
-1.  **Macro Grid (0.0020 BTC Base):**
-    *   **Purpose:** Long-term accumulation and capital growth.
-    *   **Logic:** Larger position sizes designed to capture significant market moves and maintain a core position during bullish trends.
-2.  **Micro Grid (0.0003 BTC Scalper):**
-    *   **Purpose:** High-frequency cash flow and activity.
-    *   **Logic:** Small, agile positions that scalp minor price fluctuations (0.1% - 0.5%) to generate consistent small profits even in sideways markets.
+The bot implements a **Dynamic Symmetric Grid** strategy:
 
-## 🛠 Trading Logic & Protections
+1.  **Maintenance:** Every 5 minutes, the bot compares current market price against planned grid levels. If a level is missing an order, it places a new limit order.
+2.  **Rescale:** If the price moves beyond the `trailingPercent` threshold of the current range, the bot cancels all orders and re-centers the grid around the new price.
+3.  **Profit Taking:** Sell orders are only placed if they meet the `minProfitGap` requirement relative to the average position cost (for Micro grid).
 
-*   **Auto-Trailing (Rescale):** The system monitors the price 24/7. If the market moves beyond the active grid range, it automatically cancels old orders and "re-centers" the grid around the new price.
-*   **Cost Protection:** Built-in logic prevents the bot from selling below your average cost basis plus a minimum profit margin, avoiding "selling at a loss" during dips.
-*   **Overload Protection:** You can define a `maxPosition` limit. Once reached, the bot will stop buying and wait for recovery to protect your account balance.
-*   **Efficiency:** Formatted output is optimized for AI agents, using minimal tokens for reporting and status checks.
+## Configuration
 
-## 🚀 Getting Started
+Files should be placed in `/root/.openclaw/workspace/okx_data/`:
 
-### 1. Installation
-```bash
-openclaw skill install okx-trader
-```
-
-### 2. Configuration
-Add your API credentials to your `openclaw.json`. Ensure your API key has **Trade** and **Read** permissions enabled.
+### `config.json`
 ```json
-"skills": {
-  "entries": {
-    "okx": {
-      "apiKey": "YOUR_API_KEY",
-      "secretKey": "YOUR_SECRET_KEY",
-      "passphrase": "YOUR_PASSPHRASE",
-      "isSimulation": false
-    }
-  }
+{
+  "apiKey": "YOUR_API_KEY",
+  "secretKey": "YOUR_SECRET_KEY",
+  "passphrase": "YOUR_PASSPHRASE",
+  "isSimulation": true
 }
 ```
 
-### 3. Automated Tasks (Cron)
-We recommend setting up two Cron jobs:
-- `okx_grid_maintain`: Every 5 minutes (Silent mode).
-- `okx_report`: Every hour (Announce mode).
+### `grid_settings.json`
+Supports `main` and `micro` configurations.
+
+## Environment Variables
+
+- `OKX_API_KEY`
+- `OKX_SECRET_KEY`
+- `OKX_PASSPHRASE`
+- `OKX_IS_SIMULATION` (default: false)
+
+## Disclaimer
+
+This software is for educational purposes only. Do not trade money you cannot afford to lose.
 
 ---
 
-# OKX-Trader 交易技能 (OpenClaw)
+# OKX Trader Skill (中文说明)
 
-这是一个为 OpenClaw 设计的专业级自动化交易技能，专门针对 OKX 交易所进行了优化。它提供了一套稳健的“双层网格”交易系统，内置风险控制和高效率的报表功能。
+专为 OpenClaw 设计的 OKX 专业自动化网格交易系统。
 
-## 🌟 核心理念：双重网格策略
+## 交易逻辑
 
-本技能采用 **大网格 (Macro) + 小网格 (Micro)** 的双层架构，旨在全方位捕捉市场机会：
+机器人执行**动态对称网格**策略：
 
-1.  **大网格 (0.0020 BTC 底仓):**
-    *   **设计目的**：长期积累与资产增值。
-    *   **交易逻辑**：较大的单笔仓位，旨在捕捉市场的主流波段，在趋势行情中维持核心底仓并获取大额利润。
-2.  **小网格 (0.0003 BTC 高频):**
-    *   **设计目的**：维持现金流与账户活跃度。
-    *   **交易逻辑**：极小的单笔仓位，灵活捕捉 0.1% - 0.5% 的细微波动。即使在横盘震荡行情中，也能通过频繁成交贡献持续的小额收益。
+1.  **定期维护:** 每5分钟，机器人对比当前市价与计划网格水位。如果某个水位缺失订单，则下达新的限价单。
+2.  **自动移动:** 如果价格超出当前区间设定的偏移阈值，机器人将取消所有订单，并以新价格为中心重置网格。
+3.  **止盈保护:** （针对小网格）卖单仅在满足相对于持仓均价的最小利润间隔时才会下达。
 
-## 🛠 交易逻辑与保护机制
+## 配置说明
 
-*   **自动追踪 (Rescale)**：系统 24/7 监控价格。一旦价格偏离当前网格有效范围，脚本会自动撤销旧单并在新价格中心重新铺设网格，确保策略永不踏空。
-*   **成本保护**：内置成本校验逻辑。当价格处于成本价以下时，系统将拒绝执行任何导致亏损的卖出操作，确保每一笔配对成交都是盈利的。
-*   **过载保护**：可配置 `maxPosition` 最大持仓限制。达到上限后系统将自动停止买入补仓，保护账户资金安全。
-*   **AI 友好**：报表输出经过极简化设计，在保证信息完整的条件下，将 Token 消耗降至最低。
+文件应存放在 `/root/.openclaw/workspace/okx_data/` 目录下：
 
-## 🚀 快速开始
+### `config.json`
+见上方英文示例。
 
-### 1. 安装
-```bash
-openclaw skill install okx-trader
-```
+### `grid_settings.json`
+支持 `main` 和 `micro` 配置。
 
-### 2. 配置
-在您的 `openclaw.json` 中添加 API 信息（建议仅开启“交易”与“读取”权限）：
-```json
-"skills": {
-  "entries": {
-    "okx": {
-      "apiKey": "你的APIKEY",
-      "secretKey": "你的SECRET",
-      "passphrase": "你的口令",
-      "isSimulation": false
-    }
-  }
-}
-```
+## 环境变量
 
-### 3. 自动化任务建议
-建议在 OpenClaw 中配置以下 Cron：
-- `okx_grid_maintain`: 每 5 分钟执行一次，用于维护挂单。
-- `okx_report`: 每小时执行一次，用于推送收益报表。
+见上方英文列表。
 
-## 📄 License
-MIT
+## 免责声明
+
+本软件仅用于教学目的。请勿使用你无法承受损失的资金进行交易。

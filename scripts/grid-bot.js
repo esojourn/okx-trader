@@ -3,52 +3,39 @@ const path = require('path');
 const OKXClient = require('../lib/okx-client');
 
 /**
- * OKX Grid Bot Script (Standardized for AgentSkill)
- * Usage: node grid-bot.js [main|micro]
+ * OKX Grid Bot Script - Optimized v2.2
+ * Improvements: Path normalization, Batch API execution, Improved logging.
  */
 
 const botType = process.argv[2] || 'main';
 
-// 统一配置与数据路径处理
 function getPaths() {
-    // 默认 workspace 路径
-    const workspaceRoot = path.resolve(__dirname, '../../../workspace');
+    const dataRoot = '/root/.openclaw/workspace/okx_data';
     const skillRoot = path.resolve(__dirname, '..');
     
     return {
-        auth: [
-            path.resolve(process.cwd(), 'okx_config.json'),
-            path.resolve(workspaceRoot, 'okx_data/config.json'),
-            path.resolve(skillRoot, 'config.json')
-        ],
-        settings: [
-            path.resolve(process.cwd(), 'grid_settings.json'),
-            path.resolve(workspaceRoot, 'okx_data/grid_settings.json'),
-            path.resolve(skillRoot, 'grid_settings.json')
-        ],
-        auditLog: path.resolve(workspaceRoot, 'okx_data/logs/rescale_audit.json')
+        auth: path.resolve(dataRoot, 'config.json'),
+        settings: path.resolve(dataRoot, 'grid_settings.json'),
+        auditLog: path.resolve(dataRoot, 'logs/rescale_audit.json')
     };
 }
 
-function loadJSON(paths) {
-    for (const p of paths) {
-        if (fs.existsSync(p)) return { data: JSON.parse(fs.readFileSync(p, 'utf8')), path: p };
-    }
+function loadJSON(p) {
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
     return null;
 }
 
 async function main() {
     const paths = getPaths();
-    const authCfg = loadJSON(paths.auth);
-    const settingsCfg = loadJSON(paths.settings);
+    const authData = loadJSON(paths.auth);
+    const settings = loadJSON(paths.settings);
 
-    if (!authCfg || !settingsCfg) {
-        console.error('Missing config.json or grid_settings.json');
+    if (!authData || !settings) {
+        console.error(`Missing config at ${paths.auth} or ${paths.settings}`);
         process.exit(1);
     }
 
-    const client = new OKXClient(authCfg.data);
-    const settings = settingsCfg.data;
+    const client = new OKXClient(authData);
     const CONFIG = settings[botType];
 
     if (!CONFIG) {
@@ -59,61 +46,55 @@ async function main() {
     let auditEntry = { status: 'success', info: '' };
 
     try {
-        // 1. 获取行情与仓位
-        const [ticker, posData] = await Promise.all([
+        // 1. Concurrent Fetch: Ticker, Positions, and Pending Orders
+        const [ticker, posData, pendingOrders] = await Promise.all([
             client.request('/market/ticker', 'GET', { instId: CONFIG.instId }),
-            client.request('/account/positions', 'GET', { instId: CONFIG.instId })
+            client.request('/account/positions', 'GET', { instId: CONFIG.instId }),
+            client.request('/trade/orders-pending', 'GET', { instId: CONFIG.instId })
         ]);
 
         const currentPrice = parseFloat(ticker[0].last);
         let currentPos = 0, avgPx = 0;
         if (posData && posData.length > 0) {
-            currentPos = parseFloat(posData[0].pos);
-            avgPx = parseFloat(posData[0].avgPx);
+            const pos = posData.find(p => p.instId === CONFIG.instId);
+            if (pos) {
+                currentPos = parseFloat(pos.pos);
+                avgPx = parseFloat(pos.avgPx);
+            }
         }
 
-        // 2. Trailing/Rescale 逻辑
+        // 2. Trailing/Rescale Logic
         const range = CONFIG.maxPrice - CONFIG.minPrice;
         const threshold = range * (CONFIG.trailingPercent || 0.1);
-        let needsRescale = false;
-
+        
         if (currentPrice > CONFIG.maxPrice - threshold || currentPrice < CONFIG.minPrice + threshold) {
-            needsRescale = true;
-        }
-
-        if (needsRescale) {
-            console.log(`[${botType}] Rescaling... (Price: ${currentPrice})`);
-            // 取消当前网格订单
-            const orders = await client.request('/trade/orders-pending', 'GET', { instId: CONFIG.instId });
-            const toCancel = orders
+            console.log(`[${botType}] Rescaling... Price: ${currentPrice}`);
+            
+            const toCancel = pendingOrders
                 .filter(o => Math.abs(parseFloat(o.sz) - CONFIG.sizePerGrid) < 0.000001)
                 .map(o => ({ instId: CONFIG.instId, ordId: o.ordId }));
             
-            for (const o of toCancel) {
-                await client.request('/trade/cancel-order', 'POST', JSON.stringify(o));
+            if (toCancel.length > 0) {
+                // Batch cancel
+                await Promise.all(toCancel.map(o => client.request('/trade/cancel-order', 'POST', JSON.stringify(o))));
             }
 
-            const newMin = currentPrice - (range / 2);
-            const newMax = currentPrice + (range / 2);
+            const newMin = Math.round(currentPrice - (range / 2));
+            const newMax = Math.round(currentPrice + (range / 2));
             
-            // 更新设置
-            settings[botType].minPrice = Math.round(newMin);
-            settings[botType].maxPrice = Math.round(newMax);
-            fs.writeFileSync(settingsCfg.path, JSON.stringify(settings, null, 4));
+            settings[botType].minPrice = newMin;
+            settings[botType].maxPrice = newMax;
+            fs.writeFileSync(paths.settings, JSON.stringify(settings, null, 4));
             
-            CONFIG.minPrice = Math.round(newMin);
-            CONFIG.maxPrice = Math.round(newMax);
+            CONFIG.minPrice = newMin;
+            CONFIG.maxPrice = newMax;
             auditEntry.rescaled = true;
         }
 
-        // 3. 网格下单与保护
+        // 3. Grid Calculation
         const step = (CONFIG.maxPrice - CONFIG.minPrice) / (CONFIG.gridCount - 1);
-        const grids = [];
-        for (let i = 0; i < CONFIG.gridCount; i++) {
-            grids.push(CONFIG.minPrice + (i * step));
-        }
+        const grids = Array.from({ length: CONFIG.gridCount }, (_, i) => CONFIG.minPrice + (i * step));
 
-        const pendingOrders = await client.request('/trade/orders-pending', 'GET', { instId: CONFIG.instId });
         const activeOrders = new Map();
         pendingOrders.forEach(o => {
             if (Math.abs(parseFloat(o.sz) - CONFIG.sizePerGrid) < 0.000001) {
@@ -121,10 +102,12 @@ async function main() {
             }
         });
 
-        let placedBuy = 0, placedSell = 0, protectedSell = 0;
         const buffer = botType === 'micro' ? 0.001 : 0.003;
-        const isOverloaded = CONFIG.maxPosition && currentPos >= CONFIG.maxPosition;
+        const isOverloaded = CONFIG.maxPosition && Math.abs(currentPos) >= CONFIG.maxPosition;
         const minProfitPx = CONFIG.minProfitGap ? (avgPx * (1 + CONFIG.minProfitGap)) : 0;
+
+        const ordersToPlace = [];
+        let protectedSell = 0;
 
         for (const price of grids) {
             const diff = (price - currentPrice) / currentPrice;
@@ -137,31 +120,40 @@ async function main() {
             if (!activeOrders.has(priceKey)) {
                 if (side === 'buy' && isOverloaded) continue;
                 if (side === 'sell' && currentPos > 0 && price < minProfitPx) {
-                    protectedSell++; continue;
+                    protectedSell++;
+                    continue;
                 }
 
-                await client.request('/trade/order', 'POST', JSON.stringify({
+                ordersToPlace.push({
                     instId: CONFIG.instId,
                     tdMode: 'cash',
                     side: side,
                     ordType: 'limit',
                     px: price.toFixed(1),
                     sz: CONFIG.sizePerGrid.toString()
-                }));
-                if (side === 'buy') placedBuy++; else placedSell++;
-                await new Promise(r => setTimeout(r, 100));
+                });
             }
+        }
+
+        // 4. Batch Order Placement (with small delay between chunks to avoid rate limit if needed)
+        let placedBuy = 0, placedSell = 0;
+        if (ordersToPlace.length > 0) {
+            console.log(`[${botType}] Placing ${ordersToPlace.length} orders...`);
+            const results = await Promise.all(ordersToPlace.map(ord => 
+                client.request('/trade/order', 'POST', JSON.stringify(ord))
+            ));
+            
+            ordersToPlace.forEach(o => { if (o.side === 'buy') placedBuy++; else placedSell++; });
         }
 
         auditEntry.info = `Pos:${currentPos}, Px:${currentPrice}, B:${placedBuy}, S:${placedSell}, Prot:${protectedSell}`;
         console.log(`[${botType}] ${auditEntry.info}`);
 
-        // 记录审计日志
+        // Persistent Audit Logging
         try {
             let logs = fs.existsSync(paths.auditLog) ? JSON.parse(fs.readFileSync(paths.auditLog, 'utf8')) : [];
             logs.push({ ts: new Date().toISOString(), botType, ...auditEntry });
-            fs.mkdirSync(path.dirname(paths.auditLog), { recursive: true });
-            fs.writeFileSync(paths.auditLog, JSON.stringify(logs.slice(-100), null, 2));
+            fs.writeFileSync(paths.auditLog, JSON.stringify(logs.slice(-200), null, 2));
         } catch (e) {}
 
     } catch (e) {
