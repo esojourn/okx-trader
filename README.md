@@ -12,6 +12,10 @@ The bot implements a **Dynamic Symmetric Grid** strategy:
 2.  **Rescale:** If the price moves beyond the `trailingPercent` threshold of the current range, the bot cancels all orders and re-centers the grid around the new price.
 3.  **Profit Taking:** Sell orders are only placed if they meet the `minProfitGap` requirement relative to the average position cost (for Micro grid).
 
+## Account Snapshots
+
+`scripts/snapshot.js` records daily account state (balances, prices, 24h trading summary) and compares equity changes against the previous day. Data is saved to `okx_data/snapshots/YYYY-MM-DD.json`.
+
 ## Configuration
 
 Files should be placed in `/root/.openclaw/workspace/okx_data/`:
@@ -27,7 +31,7 @@ Files should be placed in `/root/.openclaw/workspace/okx_data/`:
 ```
 
 ### `grid_settings.json`
-Supports `main` and `micro` configurations.
+Supports multiple named configurations (e.g., `main`, `micro`, `eth_micro`) for different instruments and strategies.
 
 ## Environment Variables
 
@@ -54,6 +58,10 @@ This software is for educational purposes only. Do not trade money you cannot af
 2.  **自动移动:** 如果价格超出当前区间设定的偏移阈值，机器人将取消所有订单，并以新价格为中心重置网格。
 3.  **止盈保护:** （针对小网格）卖单仅在满足相对于持仓均价的最小利润间隔时才会下达。
 
+## 账户快照
+
+`scripts/snapshot.js` 每日记录账户状态（余额、价格、24h 交易汇总），并与前一天对比权益变化。数据保存至 `okx_data/snapshots/YYYY-MM-DD.json`。
+
 ## 配置说明
 
 文件应存放在 `/root/.openclaw/workspace/okx_data/` 目录下：
@@ -62,7 +70,7 @@ This software is for educational purposes only. Do not trade money you cannot af
 见上方英文示例。
 
 ### `grid_settings.json`
-支持 `main` 和 `micro` 配置。
+支持多个命名配置（如 `main`、`micro`、`eth_micro`），可用于不同交易对和策略。
 
 ## 环境变量
 

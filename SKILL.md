@@ -9,6 +9,8 @@ The agent operates two concurrent strategies:
 - **Macro Grid (Main):** Heavy positions for capturing major trend movements.
 - **Micro Grid:** High-frequency scalp positions for extracting profit from minor volatility.
 
+Supports multiple instruments (e.g., BTC-USDT, ETH-USDT) via named configurations in `grid_settings.json`.
+
 ### 2. Auto-Trailing (Rescale) Logic
 The skill automatically detects when the market price drifts outside the active grid range. It performs a "Rescale" operation:
 - Cancels all legacy orders associated with the bot.
@@ -23,10 +25,13 @@ The skill automatically detects when the market price drifts outside the active 
 ## Available Tools
 
 ### `okx_report`
-Generates a highly condensed PnL and status report.
+Generates a highly condensed PnL and status report. Automatically detects all configured instruments from `grid_settings.json` and reports per-grid statistics.
 
 ### `okx_grid_maintain`
-The core execution tool that maintains the grid structure.
+The core execution tool that maintains the grid structure. Supports any number of grid configurations (e.g., `main`, `micro`, `eth_micro`).
+
+### `okx_snapshot`
+Records a daily account snapshot including balances, prices, 24h trading summary, and day-over-day equity comparison. Data is saved to `okx_data/snapshots/YYYY-MM-DD.json`.
 
 ## Internal Dependencies
 Requires the following local files in `/root/.openclaw/workspace/okx_data/`:
@@ -51,6 +56,8 @@ Trading cryptocurrencies involves significant risk. This skill is provided "as i
 - **大网格 (Main):** 使用较大仓位，旨在捕捉主要的市场趋势运动。
 - **小网格 (Micro):** 高频剥头皮仓位，旨在从微小的波动中提取利润。
 
+支持多交易对（如 BTC-USDT、ETH-USDT），通过 `grid_settings.json` 中的命名配置管理。
+
 ### 2. 自动跟随 (Rescale) 逻辑
 技能会自动检测市场价格何时偏离活跃网格区间。它执行“Rescale”操作：
 - 取消与该机器人相关的所有旧订单。
@@ -65,10 +72,13 @@ Trading cryptocurrencies involves significant risk. This skill is provided "as i
 ## 可用工具
 
 ### `okx_report`
-生成高度压缩的损益（PnL）和状态报告。
+生成高度压缩的损益（PnL）和状态报告。自动从 `grid_settings.json` 检测所有已配置的交易对，按网格分别统计。
 
 ### `okx_grid_maintain`
-维护网格结构的核心执行工具。
+维护网格结构的核心执行工具。支持任意数量的网格配置（如 `main`、`micro`、`eth_micro`）。
+
+### `okx_snapshot`
+记录每日账户快照，包括余额、价格、24h 交易汇总及逐日权益对比。数据保存至 `okx_data/snapshots/YYYY-MM-DD.json`。
 
 ## 内部依赖
 需要在 `/root/.openclaw/workspace/okx_data/` 中存在以下本地文件：
